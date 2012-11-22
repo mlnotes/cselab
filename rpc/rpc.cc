@@ -627,8 +627,8 @@ rpcs::dispatch(djob_t *j)
 			}
 			break;
 		case INPROGRESS: // server is working on this request
-			break;
-		case DONE: // duplicate and we still have the response
+      break;
+		case DONE: // duplicate and we still have the responsei
 			c->send(b1, sz1);
 			break;
 		case FORGOTTEN: // very old request and we don't have the response anymore
@@ -661,8 +661,44 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 		unsigned int xid_rep, char **b, int *sz)
 {
 	ScopedLock rwl(&reply_window_m_);
-
         // You fill this in for Lab 1.
+  if(max_rep[clt_nonce] < xid_rep)
+    max_rep[clt_nonce] = xid_rep;
+  std::list<reply_t>::iterator it = reply_window_[clt_nonce].begin();
+
+  int find = 0;
+  while(it != reply_window_[clt_nonce].end())
+  {
+    if((*it).xid == xid)
+    {
+      if((*it).cb_present)
+      {
+        find = 1;
+        *b = (*it).buf;
+        *sz = (*it).sz;
+      }
+      else
+        find = 2;
+      ++it;
+    }
+    else if((*it).xid <= xid_rep)
+    {
+      free((*it).buf);
+      it = reply_window_[clt_nonce].erase(it);
+    }
+    else
+      ++it;
+  }
+
+  if(find == 1)
+    return DONE;
+  else if(find == 2)
+    return INPROGRESS;
+  else if(xid <= max_rep[clt_nonce])
+    return FORGOTTEN; 
+
+  reply_t reply(xid);
+  reply_window_[clt_nonce].push_back(reply); 
 	return NEW;
 }
 
@@ -677,6 +713,12 @@ rpcs::add_reply(unsigned int clt_nonce, unsigned int xid,
 {
 	ScopedLock rwl(&reply_window_m_);
         // You fill this in for Lab 1.
+  reply_t reply(xid);
+  reply.cb_present = true;
+  reply.buf = b;
+  reply.sz = sz;
+
+  reply_window_[clt_nonce].push_back(reply);
 }
 
 void
