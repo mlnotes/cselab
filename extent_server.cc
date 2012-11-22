@@ -8,19 +8,45 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-extent_server::extent_server() {}
+extent_server::extent_server()
+{
+  VERIFY(pthread_mutex_init(&mutex, NULL) == 0);
+  int r;
+  VERIFY(put(0x00000001, "", r) == extent_protocol::OK);
+}
 
+extent_server::~extent_server()
+{
+  VERIFY(pthread_mutex_destroy(&mutex) == 0);
+}
 
 int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 {
   // You fill this in for Lab 2.
-  return extent_protocol::IOERR;
+  ScopedLock lock(&mutex);
+  fs[id] = buf;
+  extent_protocol::attr a = attrs[id];
+  a.size = buf.size();
+  a.ctime = a.mtime = time(0);
+  attrs[id] = a;
+  return extent_protocol::OK;
 }
 
 int extent_server::get(extent_protocol::extentid_t id, std::string &buf)
 {
   // You fill this in for Lab 2.
-  return extent_protocol::IOERR;
+#ifdef ZDEBUG
+printf("get %016llx\n", id);
+#endif
+
+  ScopedLock lock(&mutex);
+  if(fs.find(id) == fs.end()){
+    return extent_protocol::NOENT;
+  }else{
+    buf = fs[id];
+    attrs[id].atime = time(0);
+  }
+  return extent_protocol::OK;
 }
 
 int extent_server::getattr(extent_protocol::extentid_t id, extent_protocol::attr &a)
@@ -29,16 +55,24 @@ int extent_server::getattr(extent_protocol::extentid_t id, extent_protocol::attr
   // You replace this with a real implementation. We send a phony response
   // for now because it's difficult to get FUSE to do anything (including
   // unmount) if getattr fails.
-  a.size = 0;
-  a.atime = 0;
-  a.mtime = 0;
-  a.ctime = 0;
-  return extent_protocol::OK;
+  ScopedLock lock(&mutex);
+  if(attrs.find(id) == attrs.end()){  
+    return extent_protocol::NOENT;
+  }else{
+    a = attrs[id];
+    return extent_protocol::OK;
+  }  
 }
 
 int extent_server::remove(extent_protocol::extentid_t id, int &)
 {
   // You fill this in for Lab 2.
-  return extent_protocol::IOERR;
+  ScopedLock lock(&mutex);
+  if(fs.find(id) == fs.end()){
+    return extent_protocol::NOENT;
+  }else{
+    fs.erase(id);
+    attrs.erase(id);
+    return extent_protocol::OK;
+  }
 }
-
