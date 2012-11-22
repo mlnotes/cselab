@@ -126,14 +126,28 @@ fuseserver_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
     printf("   fuseserver_setattr set size to %zu\n", attr->st_size);
     struct stat st;
     // You fill this in for Lab 2
-#if 0
+#if 1
     // Change the above line to "#if 1", and your code goes here
     // Note: fill st using getattr before fuse_reply_attr
+    yfs_client::inum inum = ino;
+    yfs_client::status ret = yfs->setsize(inum, attr->st_size);
+    if(ret != yfs_client::OK){
+      fuse_reply_err(req, ENOENT);
+      return;
+    }
+
+    ret = getattr(inum, st);
+    if(ret != yfs_client::OK){
+      fuse_reply_err(req, ENOENT);
+      return;
+    } 
+    printf("fuseserver_setattr success size -> %016llx\n", attr->st_size); 
     fuse_reply_attr(req, &st, 0);
 #else
     fuse_reply_err(req, ENOSYS);
 #endif
   } else {
+    printf("fuseserver_setattr but not set size!\n");
     fuse_reply_err(req, ENOSYS);
   }
 }
@@ -155,9 +169,15 @@ fuseserver_read(fuse_req_t req, fuse_ino_t ino, size_t size,
                 off_t off, struct fuse_file_info *fi)
 {
   // You fill this in for Lab 2
-#if 0
+#if 1
   std::string buf;
   // Change the above "#if 0" to "#if 1", and your code goes here
+  yfs_client::inum inum = ino;
+  yfs_client::status ret = yfs->read(inum, off, size, buf);   
+  if(ret != yfs_client::OK){
+    fuse_reply_err(req, ENOENT);
+    return;
+  }
   fuse_reply_buf(req, buf.data(), buf.size());
 #else
   fuse_reply_err(req, ENOSYS);
@@ -185,8 +205,16 @@ fuseserver_write(fuse_req_t req, fuse_ino_t ino,
                  struct fuse_file_info *fi)
 {
   // You fill this in for Lab 2
-#if 0
+#if 1
   // Change the above line to "#if 1", and your code goes here
+  yfs_client::inum inum = ino;
+  std::string str(buf, size);
+  
+  yfs_client::status ret = yfs->write(inum, off, str);
+  if(ret != yfs_client::OK){
+    fuse_reply_err(req, ENOENT);
+    return;
+  }
   fuse_reply_write(req, size);
 #else
   fuse_reply_err(req, ENOSYS);
@@ -220,16 +248,39 @@ fuseserver_createhelper(fuse_ino_t parent, const char *name,
   e->entry_timeout = 0.0;
   e->generation = 0;
   // You fill this in for Lab 2
-  return yfs_client::NOENT;
+  // pick a inum
+//  yfs_client::inum inum = time(0) | 0x80000000;
+//  srand((unsigned)time(0)); 
+  yfs_client::inum inum = rand() | 0x80000000;
+  yfs_client::inum iparent = parent;
+
+#ifdef ZDEBUG
+  printf("createhelper name -> %s inum -> %016llx\n", name, inum);
+#endif
+
+  yfs_client::status ret = yfs->create(iparent, inum, name);
+  if(ret != yfs_client::OK)
+    return ret;
+
+  e->ino = inum;
+  ret = getattr(inum, e->attr);
+  return ret;  
 }
 
 void
 fuseserver_create(fuse_req_t req, fuse_ino_t parent, const char *name,
                   mode_t mode, struct fuse_file_info *fi)
 {
+#ifdef ZDEBUG
+  printf("fuseserver_create name -> %s\n", name);
+#endif 
+
   struct fuse_entry_param e;
   yfs_client::status ret;
   if( (ret = fuseserver_createhelper( parent, name, mode, &e )) == yfs_client::OK ) {
+#ifdef ZDEBUG
+  printf("fuseserver_create success name -> %s\n", name);
+#endif
     fuse_reply_create(req, &e, fi);
   } else {
 		if (ret == yfs_client::EXIST) {
@@ -242,6 +293,10 @@ fuseserver_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 void fuseserver_mknod( fuse_req_t req, fuse_ino_t parent, 
     const char *name, mode_t mode, dev_t rdev ) {
+#ifdef ZDEBUG
+  printf("fuseserver_create name -> %s\n", name);
+#endif 
+
   struct fuse_entry_param e;
   yfs_client::status ret;
   if( (ret = fuseserver_createhelper( parent, name, mode, &e )) == yfs_client::OK ) {
@@ -271,8 +326,27 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
   bool found = false;
 
   // You fill this in for Lab 2
-  if (found)
+#ifdef ZDEBUG
+  printf("fuseserver_lookup name -> %s\n", name);
+#endif
+     
+  yfs_client::inum iparent = parent;
+  yfs_client::inum ichild;  
+
+  found = (yfs->lookup(iparent, name, ichild) == yfs_client::OK);
+  if (found){
+    e.ino = ichild;
+
+    struct stat st;
+    yfs_client::status ret;
+    ret = getattr(ichild, st);
+    if(ret != yfs_client::OK){
+      fuse_reply_err(req, ENOENT);
+      return;
+    }
+    e.attr = st;   
     fuse_reply_entry(req, &e);
+  }
   else
     fuse_reply_err(req, ENOENT);
 }
@@ -332,7 +406,16 @@ fuseserver_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 
 
   // You fill this in for Lab 2
+  std::vector<yfs_client::dirent> ents;
+  yfs_client::status ret = yfs->readdir(inum, ents);
+  if(ret != yfs_client::OK){
+    fuse_reply_err(req, ENOENT);
+    return;
+  }
 
+  for(unsigned int i = 0; i < ents.size(); ++i){
+    dirbuf_add(&b, ents[i].name.c_str(), ents[i].inum);
+  }
 
   reply_buf_limited(req, b.p, b.size, off, size);
   free(b.p);
@@ -369,7 +452,27 @@ fuseserver_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
   (void) e;
 
   // You fill this in for Lab 3
-#if 0
+  
+  yfs_client::inum inum = rand() & ~0x80000000;
+  yfs_client::inum iparent = parent;
+
+#ifdef ZDEBUG
+  printf("createhelper name -> %s inum -> %016llx\n", name, inum);
+#endif
+
+  yfs_client::status ret = yfs->create(iparent, inum, name);
+  if(ret == yfs_client::OK){
+    e.ino = inum;
+    getattr(inum, e.attr);
+  } else {
+		if (ret == yfs_client::EXIST) {
+			fuse_reply_err(req, EEXIST);
+		}else{
+			fuse_reply_err(req, ENOENT);
+		}
+  }
+
+#if 1
   fuse_reply_entry(req, &e);
 #else
   fuse_reply_err(req, ENOSYS);
@@ -390,7 +493,17 @@ fuseserver_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
   // You fill this in for Lab 3
   // Success:	fuse_reply_err(req, 0);
   // Not found:	fuse_reply_err(req, ENOENT);
-  fuse_reply_err(req, ENOSYS);
+  
+  yfs_client::inum iparent = parent;
+
+  if(yfs->unlink(iparent, name) == yfs_client::OK){
+    fuse_reply_err(req, 0);
+  }else{
+    fuse_reply_err(req, ENOENT);
+  }
+  
+
+  // fuse_reply_err(req, ENOSYS);
 }
 
 void
@@ -417,6 +530,8 @@ main(int argc, char *argv[])
   int err = -1;
   int fd;
 
+  srand((unsigned)time(0)); 
+  
   setvbuf(stdout, NULL, _IONBF, 0);
 
   if(argc != 4){

@@ -11,6 +11,8 @@
 
 class yfs_client {
   extent_client *ec;
+  lock_client *lc;  
+  
  public:
 
   typedef unsigned long long inum;
@@ -36,7 +38,11 @@ class yfs_client {
  private:
   static std::string filename(inum);
   static inum n2i(std::string);
- public:
+
+  static dirent str2ent(std::string);
+  static int str2dir(std::string, std::vector<dirent>&); 
+  static std::string dir2str(std::vector<dirent>&);
+public:
 
   yfs_client(std::string, std::string);
 
@@ -45,6 +51,14 @@ class yfs_client {
 
   int getfile(inum, fileinfo &);
   int getdir(inum, dirinfo &);
+
+  int create(inum, inum, std::string);
+  int lookup(inum, std::string, inum &);
+  int readdir(inum, std::vector<dirent> &);
+  int setsize(inum, unsigned long long);
+  int read(inum, unsigned long long, unsigned long long, std::string &);  
+  int write(inum, unsigned long long, std::string &);
+  int unlink(inum, std::string);
 };
 
 #endif 
