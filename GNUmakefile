@@ -7,7 +7,7 @@ LAB4GE=$(shell expr $(LAB) \>\= 4)
 LAB5GE=$(shell expr $(LAB) \>\= 5)
 LAB6GE=$(shell expr $(LAB) \>\= 6)
 LAB7GE=$(shell expr $(LAB) \>\= 7)
-CXXFLAGS =  -g -MMD -Wall -I. -I$(RPC) -DLAB=$(LAB) -DSOL=$(SOL) -D_FILE_OFFSET_BITS=64
+CXXFLAGS =  -g -MMD -Wall -I. -I$(RPC) -DLAB=$(LAB) -DSOL=$(SOL) -D_FILE_OFFSET_BITS=64 -DZDEBUG
 FUSEFLAGS= -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=25 -I/usr/local/include/fuse -I/usr/include/fuse
 ifeq ($(shell uname -s),Darwin)
   MACFLAGS= -D__FreeBSD__=10
@@ -116,7 +116,7 @@ rsm_tester:  $(patsubst %.cc,%.o,$(rsm_tester)) rpc/librpc.a
 fuse.o: fuse.cc
 	$(CXX) -c $(CXXFLAGS) $(FUSEFLAGS) $(MACFLAGS) $<
 
-# mklab.inc is needed by 6.824 staff only. Just ignore it.
+# mklab.inc is needed by staff only. Just ignore it.
 -include mklab.inc
 
 -include *.d
@@ -128,10 +128,10 @@ clean:
 	rm $(clean_files) -rf 
 
 handin_ignore=$(clean_files) core* *log
-handin_file=$(shell whoami)-lab$(LAB).tgz
+handin_file=$(shell whoami)-lab$(LAB)-112037xxxx.tgz
 labdir=$(shell basename $(PWD))
 handin: 
 	@if test -f stop.sh; then ./stop.sh > /dev/null 2>&1 | echo ""; fi
 	@bash -c "cd ../; tar -X <(tr ' ' '\n' < <(echo '$(handin_ignore)')) -czvf $(handin_file) $(labdir); mv $(handin_file) $(labdir); cd $(labdir)"
-	@echo Please email $(handin_file) to 6.824-submit@pdos.csail.mit.edu
+	@echo Please change the name of $(handin_file) and email it to xiayubin@gmail.com
 	@echo Thanks!
