@@ -413,7 +413,7 @@ fuseserver_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
     return;
   }
 
-  for(int i = 0; i < ents.size(); ++i){
+  for(unsigned int i = 0; i < ents.size(); ++i){
     dirbuf_add(&b, ents[i].name.c_str(), ents[i].inum);
   }
 
@@ -452,7 +452,27 @@ fuseserver_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
   (void) e;
 
   // You fill this in for Lab 3
-#if 0
+  
+  yfs_client::inum inum = rand() & ~0x80000000;
+  yfs_client::inum iparent = parent;
+
+#ifdef ZDEBUG
+  printf("createhelper name -> %s inum -> %016llx\n", name, inum);
+#endif
+
+  yfs_client::status ret = yfs->create(iparent, inum, name);
+  if(ret == yfs_client::OK){
+    e.ino = inum;
+    getattr(inum, e.attr);
+  } else {
+		if (ret == yfs_client::EXIST) {
+			fuse_reply_err(req, EEXIST);
+		}else{
+			fuse_reply_err(req, ENOENT);
+		}
+  }
+
+#if 1
   fuse_reply_entry(req, &e);
 #else
   fuse_reply_err(req, ENOSYS);
@@ -473,7 +493,17 @@ fuseserver_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
   // You fill this in for Lab 3
   // Success:	fuse_reply_err(req, 0);
   // Not found:	fuse_reply_err(req, ENOENT);
-  fuse_reply_err(req, ENOSYS);
+  
+  yfs_client::inum iparent = parent;
+
+  if(yfs->unlink(iparent, name) == yfs_client::OK){
+    fuse_reply_err(req, 0);
+  }else{
+    fuse_reply_err(req, ENOENT);
+  }
+  
+
+  // fuse_reply_err(req, ENOSYS);
 }
 
 void

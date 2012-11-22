@@ -14,7 +14,7 @@
 yfs_client::yfs_client(std::string extent_dst, std::string lock_dst)
 {
   ec = new extent_client(extent_dst);
-
+  lc = new lock_client(lock_dst);
 }
 
 yfs_client::inum
@@ -176,31 +176,39 @@ yfs_client::lookup(inum parent, std::string child, inum &inum)
 int 
 yfs_client::create(inum parent, inum inum, std::string name)
 {  
-  int r = OK;
-  
+  int r = OK;  
+  dirent ent;
+
   printf("create name -> %s inum -> %016llx\n", name.c_str(), inum);
-  
+
+  lc->acquire(parent);
   std::vector<dirent> ents;
   r = readdir(parent, ents);  
   if(r != extent_protocol::OK)
-    return r;
+    goto release;
 
   for(int i = 0; i < ents.size(); ++i){
-    if(name == ents[i].name)
-      return yfs_client::EXIST; 
+    if(name == ents[i].name){
+      r = yfs_client::EXIST;
+      goto release;
+    }
   }
   
   // do the real work
+  lc->acquire(inum);
   r = ec->put(inum, name);
+  lc->release(inum);
+
   if(r != extent_protocol::OK)
-    return r;
-  
-  dirent ent;
+    goto release;
+ 
   ent.name = name;
   ent.inum = inum;    
   ents.push_back(ent);
   r = ec->put(parent, dir2str(ents));  
 
+ release:
+  lc->release(parent);
   return r;
 }
 
@@ -211,13 +219,17 @@ yfs_client::setsize(inum inum, unsigned long long size)
 
   printf("setsize inum -> %016llx size -> %016llx\n", inum, size);
 
+  lc->acquire(inum);
   std::string str;
   r = ec->get(inum, str); 
   if(r != extent_protocol::OK)
-    return r;
+    goto release;
 
   str.resize(size);
   r = ec->put(inum, str);
+
+ release:
+  lc->release(inum);
   return r;
 }
 
@@ -246,15 +258,67 @@ yfs_client::write(inum inum, unsigned long long offset, std::string &buf)
   int r = OK;
   printf("yfs_client write inum-> %016llx offset -> %016llx content -> %s\n", inum, offset, buf.c_str());
 
+  lc->acquire(inum);
   std::string str;
   r = ec->get(inum, str);
   if(r != extent_protocol::OK)
-    return r;
+    goto release;
 
   if(str.size() < offset + buf.size())
     str.resize(offset + buf.size());
 
   str.replace(offset, buf.size(), buf);
   r = ec->put(inum, str);
+
+ release:
+  lc->release(inum);
+  return r;
+}
+
+int
+yfs_client::unlink(inum parent, std::string name){
+
+  int r = OK;
+  inum inum = 0; 
+  bool found = false;
+ 
+  printf("unlink name -> %s parent -> %016llx\n", name.c_str(), parent);
+
+  std::vector<dirent> ents;
+  std::vector<dirent>::iterator iter;
+  
+  lc->acquire(parent);
+  r = readdir(parent, ents);  
+  if(r != extent_protocol::OK)
+    goto release;
+
+  iter = ents.begin();
+  while(iter != ents.end()){
+    if(name == (*iter).name){
+      found = true;
+      inum = (*iter).inum;
+      ents.erase(iter);
+      break;
+    }
+    iter++;
+  }
+  
+  if(!found){
+    r = extent_protocol::NOENT; 
+    goto release;
+  }
+ 
+  r = ec->put(parent, dir2str(ents));
+  if(r != extent_protocol::OK)
+    goto release;
+  else{
+    // remove content
+    lc->acquire(inum);
+    r = ec->remove(inum);
+    lc->release(inum);
+  }
+
+ release:
+  lc->release(parent);
   return r;
 }
