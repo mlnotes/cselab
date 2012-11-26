@@ -10,15 +10,8 @@
 
 class lock_info{
  public:
-  lock_info(){
-    pthread_cond_init(&cond, NULL);
-  }
-  ~lock_info(){
-    pthread_cond_destroy(&cond);  
-  }
   std::string owner;
   std::string waiting;
-  pthread_cond_t cond;
 };
 
 class lock_server_cache {
