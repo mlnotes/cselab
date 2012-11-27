@@ -19,7 +19,6 @@ class lock_client_info{
   typedef int status;
   
   status state;
-  pthread_t tid;
   pthread_cond_t cond;
 
   lock_client_info(){
