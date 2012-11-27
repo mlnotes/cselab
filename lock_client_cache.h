@@ -10,7 +10,6 @@
 #include "lock_client.h"
 #include "lang/verify.h"
 
-#include <map>
 #include <set>
 
 class lock_client_info{
