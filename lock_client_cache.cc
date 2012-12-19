@@ -111,6 +111,9 @@ lock_client_cache::release(lock_protocol::lockid_t lid)
     if(revokes.find(lid) != revokes.end()){ // release to the server
       tprintf("[RELEASE TO SERVER]: lid=>%llu id=>%s\n", lid, this->id.c_str());
       locks[lid].state = lock_client_info::RELEASING;
+      if(lu != 0)
+        lu->dorelease(lid);
+
       pthread_mutex_unlock(&lock_mutex);
     
       int r;
@@ -144,6 +147,9 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
   pthread_mutex_lock(&lock_mutex);
   if(locks[lid].state == lock_client_info::FREE){
     locks[lid].state = lock_client_info::RELEASING;
+    if(lu != 0)
+      lu->dorelease(lid);
+
     pthread_mutex_unlock(&lock_mutex);
     tprintf("[RLEASE TO SERVER]: lid=>%llu id=>%s\n", lid, id.c_str());
     

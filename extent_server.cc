@@ -29,6 +29,8 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
   a.size = buf.size();
   a.ctime = a.mtime = time(0);
   attrs[id] = a;
+
+  printf("put id=>%16llu, buf=>%s\n", id, buf.c_str());
   return extent_protocol::OK;
 }
 
